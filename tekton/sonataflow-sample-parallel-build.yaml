@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: sonataflow-sample-parallel-build-
+spec:
+  params:
+  - name: repo-url
+    value: https://github.com/flows-examples/sonataflow-parallel
+  - name: image-registry
+    value: quay.io/ricardozanini
+  # mount this secret in kaniko task
+  #- name: registry-secret
+  #  value: quay-creds
+  # we might have to add a file name here
+  #- name: workflow-file
+  #  value: workflow.sw.json
+  pipelineRef:
+    name: sonataflow-project-pipeline
+  workspaces:
+  - name: application-source
+    persistentVolumeClaim:
+      claimName: shared-task-storage

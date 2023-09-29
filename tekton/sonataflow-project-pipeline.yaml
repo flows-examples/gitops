@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-task-storage
+spec:
+  resources:
+    requests:
+      storage: 16Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: sonataflow-project-pipeline
+spec:
+  params:
+    - name: repo-url
+      type: string
+      description: The git repository URL to clone from.
+    - name: image-registry
+      type: string
+      description: The image registry of the image build (e.g. quay.io/acme)
+  workspaces:
+    - name: application-source
+  tasks:
+    # see https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.9
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: application-source
+      params:
+        - name: url
+          value: $(params.repo-url)
+    # get the workflow name and version
+    - name: collect-workflow-data
+      runAfter:
+        - git-clone
+      taskSpec:
+        results:
+          - name: workflow-id
+            description: The workflow id in the workflow definition
+          - name: workflow-version
+            description: The workflow version in the workflow definition
+        workspaces:
+          - name: source
+            readOnly: true
+        steps:
+          - name: run-yq
+            image: mikefarah/yq
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+
+              # printf remove newlines
+              printf %s $(yq -oy '.version // "1.0.0"' $(workspaces.source.path)/workflow.sw.json) > "$(results.workflow-version.path)"
+              printf %s $(yq -oy '.id' $(workspaces.source.path)/workflow.sw.json) > "$(results.workflow-id.path)"
+      workspaces:
+        - name: source
+          workspace: application-source
+    - name: build
+      runAfter:
+        - collect-workflow-data
+      taskRef:
+        name: kaniko
+      workspaces:
+        - name: source
+          workspace: application-source
+      params:
+        - name: IMAGE
+          value: $(params.image-registry)/$(tasks.collect-workflow-data.results.workflow-id):$(tasks.collect-workflow-data.results.workflow-version)
+        - name: CONTEXT
+          value: $(workspaces.source.path)
