@@ -24,6 +24,7 @@ spec:
       description: The image registry of the image build (e.g. quay.io/acme)
   workspaces:
     - name: application-source
+    - name: image-pull-secret
   tasks:
     # see https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.9
     - name: git-clone
@@ -69,8 +70,11 @@ spec:
       workspaces:
         - name: source
           workspace: application-source
+        - name: dockerconfig
+          workspace: image-pull-secret
       params:
+          # same we use on the operator
+        - name: BUILDER_IMAGE
+          value: gcr.io/kaniko-project/executor:v1.9.0
         - name: IMAGE
           value: $(params.image-registry)/$(tasks.collect-workflow-data.results.workflow-id):$(tasks.collect-workflow-data.results.workflow-version)
-        - name: CONTEXT
-          value: $(workspaces.source.path)
