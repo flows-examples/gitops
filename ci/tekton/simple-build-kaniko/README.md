@@ -46,7 +46,11 @@ You can see the pipeline installed in the Tekton Dashboard.
 
 ## Run the Pipeline
 
-To run the pipeline, just create the following resource:
+To run the pipeline, you must create a `PipelineRun` manifest. This file has the input information for the pipeline to run. Namely:
+
+- `repo-url`: the SonataFlow project git repository. (Hint: you can use the kn workflow CLI to create one for you).
+- `image-registry`: the image registry to where to push the image. The workflow id and version will be appended to the final image name. For example, given a `quay.io/acme` input having a `my-workflow` id will result in `quay.io/acme/my-workflow:1.0.0`. Version can be empty, but the pipeline defaults to `1.0.0.`.
+- `image-pull-secret`: the secret created in a few steps before. You should not change this unless your registry does not require authentication.
 
 ```shell
 kubectl create -f sonataflow-kaniko-pipeline-run.yaml
