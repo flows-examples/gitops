@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: sonataflow-kaniko-pipeline-build-
+spec:
+  params:
+    - name: repo-url
+      value: https://github.com/flows-examples/sonataflow-parallel
+    - name: image-registry
+      value: quay.io/ricardozanini
+  pipelineRef:
+    name: sonataflow-project-pipeline
+  workspaces:
+    - name: application-source
+      persistentVolumeClaim:
+        claimName: shared-task-storage
+    - name: image-pull-secret
+      secret:
+        secretName: quay-creds
+        items:
+          # assuming you created a kubernetes.io/dockerconfigjson secret
+          - key: .dockerconfigjson
+            path: config.json
