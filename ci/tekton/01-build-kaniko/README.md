@@ -10,15 +10,13 @@ This pipeline is really simple:
 
 ## Prereqs
 
-- [Install Tekton](https://tekton.dev/docs/installation/local-installation/)
-- (Optional, but recommended) [Install Tekton Dashboard](https://tekton.dev/docs/dashboard/)
+See [main prereqs](../README.md)
 
 ## Install required Tasks
 
-Assuming your Tekton installation is working, you must create two required tasks by this pipeline in the target namespace (the namespace where you will run the pipeline):
+See [main Install required Tasks](../README.md), additionally you must install:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
 kubectl apply -f https://api.hub.tekton.dev/v1/resource/tekton/task/kaniko/0.6/raw
 ```
 
