@@ -11,10 +11,13 @@ Please follow all the steps in this instructions before running the examples.
 
 ## Install required Tasks
 
-Assuming your Tekton installation is working, you must create two required tasks by this pipeline in the target namespace (the namespace where you will run the pipeline):
+Assuming your Tekton installation is working, you must create one required task by every pipeline in the target namespace (the namespace where you will run the pipeline):
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-cli/0.4/git-cli.yaml
-kubectl apply -f https://api.hub.tekton.dev/v1/resource/tekton/task/github-open-pr/0.2/raw
-
+kubectl apply -f https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.9
 ```
+
+## Available Examples
+
+1. [Build a SonataFlow with Kaniko](01-build-kaniko/README.md)
+2. [Build a SonataFlow with Kaniko, and open PRs to update Kubernetes manifests](02-build-kaniko-gen-manifest/README.md)
