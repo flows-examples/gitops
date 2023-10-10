@@ -1,0 +1,178 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-task-storage
+spec:
+  resources:
+    requests:
+      storage: 16Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: sonataflow-kaniko-genman-pipeline
+spec:
+  params:
+    - name: repo-url
+      type: string
+      description: The git workflow repository URL to clone from.
+    - name: repo-config-url
+      type: string
+      description: The git workflow config repository URL to clone from.
+    - name: image-registry
+      type: string
+      description: The image registry of the image build (e.g. quay.io/acme).
+    - name: github-token-secret
+      type: string
+      description: The name of the Kubernetes Secret where to find the Github token. Key must be "token".
+    - name: github-user
+      type: string
+      description: The Github username to use when creating the new branch
+    - name: github-email
+      type: string
+      description: The Github e-mail to use when creating the new branch
+  workspaces:
+    - name: application-source
+    - name: image-pull-secret
+    - name: ssh-creds-secret
+  tasks:
+    # see https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.9
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: application-source
+      params:
+        - name: url
+          value: https://github.com/$(params.repo-url)
+    # get the workflow name and version
+    - name: collect-workflow-data
+      runAfter:
+        - git-clone
+      taskSpec:
+        results:
+          - name: workflow-id
+            description: The workflow id in the workflow definition
+          - name: workflow-version
+            description: The workflow version in the workflow definition
+        workspaces:
+          - name: source
+            readOnly: true
+        steps:
+          - name: run-yq
+            image: mikefarah/yq
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+
+              # printf remove newlines
+              printf %s $(yq -oy '.version // "1.0.0"' $(workspaces.source.path)/workflow.sw.json) > "$(results.workflow-version.path)"
+              printf %s $(yq -oy '.id' $(workspaces.source.path)/workflow.sw.json) > "$(results.workflow-id.path)"
+      workspaces:
+        - name: source
+          workspace: application-source
+    - name: build
+      runAfter:
+        - collect-workflow-data
+      # see https://api.hub.tekton.dev/v1/resource/tekton/task/kaniko/0.6/raw
+      taskRef:
+        name: kaniko
+      workspaces:
+        - name: source
+          workspace: application-source
+        - name: dockerconfig
+          workspace: image-pull-secret
+      params:
+        # same we use on the operator
+        - name: BUILDER_IMAGE
+          value: gcr.io/kaniko-project/executor:v1.9.0
+        - name: IMAGE
+          value: $(params.image-registry)/$(tasks.collect-workflow-data.results.workflow-id):$(tasks.collect-workflow-data.results.workflow-version)
+    - name: generate-manifest
+      runAfter:
+        - collect-workflow-data
+      workspaces:
+        - name: source
+          workspace: application-source
+      params:
+        - name: workflow-id
+          value: $(tasks.collect-workflow-data.results.workflow-id)
+        - name: image
+          value: $(tasks.build.results.IMAGE_URL)
+      taskSpec:
+        params:
+          - name: workflow-id
+          - name: image
+        workspaces:
+          - name: source
+        steps:
+          - name: gen-manifest
+            image: quay.io/ricardozanini/sonataflow-tools:0.32.0-snapshot
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+              # generate the sonataFlow Kubernetes manifests
+              cd $(workspaces.source.path)
+              kn workflow gen-manifest
+              # remove the prod profile
+              yq -i 'del(.metadata.annotations."sonataflow.org/profile")' manifests/01-sonataflow_$(params.workflow-id).yaml
+              # add the image we just built
+              yq -i '.spec.podTemplate.container.image="$(params.image)"' manifests/01-sonataflow_$(params.workflow-id).yaml
+              echo "---> Resulting SonataFlow '$(params.workflow-id)'"
+              cat manifests/01-sonataflow_$(params.workflow-id).yaml
+    - name: prepare-config-pr
+      runAfter:
+        - generate-manifest
+      taskRef:
+        name: git-cli
+      workspaces:
+        - name: source
+          workspace: application-source
+        - name: ssh-directory
+          workspace: ssh-creds-secret
+      params:
+        - name: GIT_USER_NAME
+          value: $(params.github-user)
+        - name: GIT_USER_EMAIL
+          value: $(params.github-email)
+        - name: GIT_SCRIPT
+          value: |
+            #!/usr/bin/env sh
+            set -eu
+
+            rm -rf $(workspaces.source.path)/config
+            cd $(workspaces.source.path)
+            rm -rf .git*
+            git clone git@github.com:$(params.repo-config-url).git config
+            mv -v manifests/* config/
+            ls -a | grep -xv config | xargs rm -rf || true
+            cd config
+            git checkout -b sf-$(tasks.collect-workflow-data.results.workflow-id)-$(tasks.collect-workflow-data.results.workflow-version)
+            git add . && git commit -am "Added generated manifests"
+            git push -u origin sf-$(tasks.collect-workflow-data.results.workflow-id)-$(tasks.collect-workflow-data.results.workflow-version)
+            # clean up
+            rm -rf $(workspaces.source.path)/config
+    - name: open-pr
+      runAfter:
+        - prepare-config-pr
+      taskRef:
+        name: github-open-pr
+      params:
+        - name: GITHUB_TOKEN_SECRET_NAME
+          value: $(params.github-token-secret)
+        - name: REPO_FULL_NAME
+          value: $(params.repo-config-url)
+        - name: HEAD
+          value: sf-$(tasks.collect-workflow-data.results.workflow-id)-$(tasks.collect-workflow-data.results.workflow-version)
+        - name: BASE
+          value: main
+        - name: BODY
+          value: |
+            New version $(tasks.collect-workflow-data.results.workflow-version) of the workflow $(tasks.collect-workflow-data.results.workflow-id).
+            Built image is already available at $(tasks.build.results.IMAGE_URL).
+        - name: TITLE
+          value: Changes to $(tasks.collect-workflow-data.results.workflow-id) version $(tasks.collect-workflow-data.results.workflow-version)
