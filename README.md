@@ -30,3 +30,6 @@ The figure below gives an overview of this CI/CD process:
 
 ![SonataFlow CI/CD Overview](imgs/cicd-overview.png)
 
+## Video Explanation
+
+[![DevLog #004 - CI/CD With SonataFlow Operator](http://img.youtube.com/vi/R6innFwCd94/0.jpg)](http://www.youtube.com/watch?v=R6innFwCd94 "DevLog #004 - CI/CD With SonataFlow Operator")
