@@ -143,12 +143,14 @@ spec:
           value: |
             #!/usr/bin/env sh
             set -eu
-
+            # delete old runs
             rm -rf $(workspaces.source.path)/config
             cd $(workspaces.source.path)
+            # clean up git and clone again
             rm -rf .git*
             git clone git@github.com:$(params.repo-config-url).git config
-            mv -v manifests/* config/
+            mkdir -p config/manifests
+            mv -v manifests/* config/manifests/
             ls -a | grep -xv config | xargs rm -rf || true
             cd config
             git checkout -b sf-$(tasks.collect-workflow-data.results.workflow-id)-$(tasks.collect-workflow-data.results.workflow-version)
