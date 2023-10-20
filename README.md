@@ -2,7 +2,7 @@
 
 Collection of GitOps use cases to use with [SonataFlow Operator](https://sonataflow.org/serverlessworkflow/latest/cloud/operator/install-serverless-operator.html).
 
-## Simple CI Build with Tekton and Kaniko
+## CI with Tekton
 
 In this example, we show the possibility to build a "single file" SonataFlow project into an image. Later, this image can be used to deploy the workflow with the SonataFlow operator.
 
@@ -29,3 +29,4 @@ The [SonataFlow Operator](https://sonataflow.org/serverlessworkflow/latest/cloud
 The figure below gives an overview of this CI/CD process:
 
 ![SonataFlow CI/CD Overview](imgs/cicd-overview.png)
+
